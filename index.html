@@ -40,6 +40,8 @@
 
             --safe-top: env(safe-area-inset-top, 0px);
             --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+            --kb-height: 0px;
         }
 
         body.light-theme {
@@ -82,16 +84,11 @@
             -webkit-touch-callout: none;
         }
 
-        /* Разрешаем выделять текст только в полях ввода */
         input, textarea {
             user-select: text;
             -webkit-user-select: text;
         }
 
-        /* ==================================================
-           APP CONTAINER — обёртка, ограничивает ширину,
-           создаёт «телефон» на десктопе и контекст для fixed
-           ================================================== */
         .app-container {
             position: relative;
             width: 100%;
@@ -99,7 +96,6 @@
             height: 100vh;
             height: 100dvh;
             max-height: 900px;
-            /* Фон по умолчанию (main/fon_1.jpg); кастомный фон перекрывается inline-стилем */
             background-color: var(--bg-color);
             background-image: url("main/fon_1.jpg");
             background-size: cover;
@@ -112,7 +108,6 @@
             transition: background-color 0.4s ease;
         }
 
-        /* Оверлей (затемнение + лёгкое замыливание) поверх фонового изображения */
         .app-container::before {
             content: '';
             position: absolute;
@@ -124,10 +119,6 @@
             pointer-events: none;
         }
 
-        /* Фон у приложения есть всегда (дефолтный из main/ или кастомный),
-           поэтому затемнение и размытие применяются всегда */
-
-        /* На десктопе делаем «телефонную» рамку */
         @media (min-width: 520px) {
             .app-container {
                 height: calc(100vh - 40px);
@@ -147,7 +138,6 @@
             }
         }
 
-        /* На мобильных скрываем внешние углы (app-container занимает весь экран) */
         @media (max-width: 519px) {
             .app-container {
                 border-radius: 0;
@@ -155,13 +145,11 @@
             }
         }
 
-        /* Все элементы (не fixed) — поверх оверлея */
         .app-container > * {
             position: relative;
             z-index: 1;
         }
 
-        /* Скрываем всё содержимое body пока активен режим тренировки */
         body.workout-active header,
         body.workout-active main,
         body.workout-active .bottom-nav { display: none; }
@@ -639,6 +627,20 @@
             flex-shrink: 0;
         }
         .close-btn:active { color: var(--primary-color); }
+
+        /* ==================================================
+           КЛАВИАТУРА ОТКРЫТА — модалка прижимается к низу,
+           прямо над клавиатурой (VisualViewport API)
+           ================================================== */
+        body.kb-open .modal-overlay.active {
+            align-items: flex-end;
+            padding-bottom: calc(var(--kb-height, 0px) + 10px);
+        }
+        body.kb-open .modal-overlay.active .modal-content {
+            margin: 0 auto;
+            max-height: calc(100dvh - 30px - var(--kb-height, 0px));
+            animation: none;
+        }
 
         .input-group { margin-bottom: 16px; }
         .input-group label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
@@ -1534,9 +1536,6 @@
             { id: 20, name: 'Шраги с гантелями', category: 'Спина', icon: 'dumbbell' }
         ];
 
-        // Демо-данные прежней версии приложения. Оставлены только для того, чтобы
-        // один раз вычистить их из хранилища у тех, кто уже открывал приложение.
-        // Новый пользователь видит полностью пустой дневник и календарь.
         const LEGACY_MOCK_HISTORY = {
             5: [
                 { name: 'Жим лежа', icon: 'dumbbell', sets: [{ weight: 60, reps: 12 }, { weight: 70, reps: 10 }, { weight: 80, reps: 8 }] },
@@ -1650,7 +1649,55 @@
         let pendingProfilePhoto = null;
 
         // ==================================================
-        // AVATAR VIEWER — координаты относительно контейнера
+        // KEYBOARD HANDLING (VisualViewport API)
+        // Прижимаем активную модалку к низу экрана — прямо над клавиатурой
+        // ==================================================
+        (function setupKeyboardHandling() {
+            if (!window.visualViewport) return;
+            const vv = window.visualViewport;
+
+            function updateKeyboardState() {
+                const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+                document.documentElement.style.setProperty('--kb-height', kb + 'px');
+                const isOpen = kb > 60;
+                document.body.classList.toggle('kb-open', isOpen);
+
+                if (!isOpen) {
+                    // Клавиатура закрыта — сбрасываем прокрутку оверлеев
+                    document.querySelectorAll('.modal-overlay').forEach(ov => { ov.scrollTop = 0; });
+                }
+            }
+
+            vv.addEventListener('resize', updateKeyboardState);
+            vv.addEventListener('scroll', updateKeyboardState);
+            updateKeyboardState();
+        })();
+
+        // Если поле всё же оказалось скрыто клавиатурой — аккуратно доскроллим
+        document.addEventListener('focusin', (e) => {
+            const input = e.target;
+            if (!input || !input.matches) return;
+            if (!input.matches('input, textarea')) return;
+            const overlay = input.closest('.modal-overlay');
+            if (!overlay) return;
+
+            setTimeout(() => {
+                if (!window.visualViewport) {
+                    input.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    return;
+                }
+                const vv = window.visualViewport;
+                const vvBottom = vv.offsetTop + vv.height;
+                const rect = input.getBoundingClientRect();
+                const margin = 16;
+                if (rect.bottom > vvBottom - margin) {
+                    overlay.scrollTop += rect.bottom - (vvBottom - margin);
+                }
+            }, 320);
+        });
+
+        // ==================================================
+        // AVATAR VIEWER
         // ==================================================
         let avatarViewerElements = null;
         let avatarViewerNameTimer = null;
@@ -1663,7 +1710,6 @@
             const overlay = document.createElement('div');
             overlay.className = 'avatar-viewer-overlay';
             
-            // Вычисляем размеры относительно app-container, а не viewport
             const containerRect = appContainer.getBoundingClientRect();
             const cw = containerRect.width;
             const ch = containerRect.height;
@@ -2057,7 +2103,7 @@
         }
 
         // ==================================================
-        // BACKGROUND — на .app-container
+        // BACKGROUND
         // ==================================================
         function compressImage(file, maxSize = 1080, quality = 0.85) {
             return new Promise((resolve, reject) => {
@@ -2101,7 +2147,6 @@
         });
 
         resetBgBtn.addEventListener('click', () => {
-            // Возвращаем фон по умолчанию из папки main/
             appContainer.style.backgroundImage = '';
             document.body.classList.remove('has-custom-bg');
             localStorage.removeItem('customBg');
@@ -2138,8 +2183,6 @@
             }
         }
 
-        // Первый запуск новой версии: убираем демо-тренировки, которые старая
-        // версия показывала в календаре «из коробки». Реальные данные не затрагиваются.
         function cleanupLegacyDemoData() {
             if (localStorage.getItem(DEMO_CLEANUP_KEY) === '1') return;
             localStorage.setItem(DEMO_CLEANUP_KEY, '1');
@@ -2639,7 +2682,6 @@
                         document.body.classList.add('has-custom-bg');
                         localStorage.setItem('customBg', data.background);
                     } else {
-                        // Фон по умолчанию из папки main/
                         appContainer.style.backgroundImage = '';
                         document.body.classList.remove('has-custom-bg');
                         localStorage.removeItem('customBg');
@@ -3089,7 +3131,6 @@
             if (openModalId === 'day-details-modal') history.back();
         }
 
-        // История хранится по календарным числам месяца: { '5': [{ name, icon, sets }] }
         function getHistoryDayEntries() {
             return Object.keys(mockWorkoutHistory)
                 .filter(day => Array.isArray(mockWorkoutHistory[day]) && mockWorkoutHistory[day].length > 0)
@@ -3136,7 +3177,6 @@
             updateWeekChart();
         }
 
-        // Прогресс за неделю — считается по реальным данным пользователя
         function updateWeekChart() {
             const container = document.getElementById('week-chart');
             if (!container) return;
@@ -3147,7 +3187,6 @@
             const year = now.getFullYear();
             const month = now.getMonth();
 
-            // Записи истории привязаны к числу месяца — раскладываем их по дням недели текущего месяца
             getHistoryDayEntries().forEach(entry => {
                 const date = new Date(year, month, entry.day);
                 if (date.getMonth() !== month) return;
@@ -3171,14 +3210,8 @@
             }).join('');
         }
 
-        document.querySelectorAll('#add-modal input, #profile-modal input').forEach(input => {
-            input.addEventListener('focus', () => {
-                setTimeout(() => input.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
-            });
-        });
-
         // ==================================================
-        // PWA — service worker (офлайн-режим и установка на телефон)
+        // PWA
         // ==================================================
         if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
             window.addEventListener('load', () => {
