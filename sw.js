@@ -6,7 +6,7 @@
    в CACHE_NAME (например, tvoy-trener-v2), иначе пользователи
    со установленным приложением увидят старые файлы из кэша.
    ========================================================== */
-const CACHE_NAME = 'tvoy-trener-v1.2';
+const CACHE_NAME = 'tvoy-trener-v1.3';
 
 const APP_SHELL = [
   './',
