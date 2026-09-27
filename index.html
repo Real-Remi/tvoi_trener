@@ -260,7 +260,8 @@
             justify-content: center;
             align-items: center;
             padding: max(10px, var(--safe-top)) 20px 6px;
-            padding-top: calc(10px + var(--safe-top));
+            /* Сразу за safe-area, без лишних +10px — шапка выше */
+            padding-top: max(10px, var(--safe-top));
             position: relative;
             flex-shrink: 0;
             z-index: 100;
@@ -285,7 +286,7 @@
         body.no-glass .bottom-nav { background-color: var(--surface-color); backdrop-filter: none; -webkit-backdrop-filter: none; }
 
         .header-dropdown {
-            position: absolute; top: calc(62px + var(--safe-top)); right: 12px; width: 240px;
+            position: absolute; top: calc(52px + max(10px, var(--safe-top))); right: 12px; width: 240px;
             background-color: var(--surface-color); border: 1px solid var(--border-color);
             border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
             z-index: 150; overflow: hidden;
@@ -567,7 +568,8 @@
         /* --- Bottom Nav --- */
         .bottom-nav {
             position: absolute;
-            bottom: calc(15px + var(--safe-bottom));
+            /* Нижняя панель — вплотную над home-indicator (как нативный tab bar) */
+            bottom: max(10px, var(--safe-bottom));
             left: 50%;
             transform: translateX(-50%);
             width: calc(100% - 20px);
@@ -3172,9 +3174,59 @@
         }
 
         document.querySelectorAll('#add-modal input, #profile-modal input').forEach(input => {
+            let scrollTimer = null;
             input.addEventListener('focus', () => {
-                setTimeout(() => input.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+                clearTimeout(scrollTimer);
+                scrollTimer = setTimeout(() => input.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
             });
+            input.addEventListener('blur', () => clearTimeout(scrollTimer));
+        });
+
+        // ==================================================
+        // iOS: восстановление после закрытия клавиатуры
+        // Известный баг standalone-PWA на iOS: клавиатура «сжимает» вьюпорт,
+        // и после закрытия window.innerHeight / visualViewport.height / 100dvh
+        // могут навсегда остаться уменьшенными — приложение сжимается,
+        // внизу остаётся чёрная полоса. Дополнительно iOS может сдвинуть
+        // («панорамировать») страницу к инпуту, что тоже открывает чёрный фон.
+        // Лечение: после потери фокуса инпутом сбрасываем сдвиг страницы,
+        // а если вьюпорт «залип» — заставляем WebKit пересчитать его,
+        // кратко скрыв display у контейнера во всю высоту (без отрисовки
+        // между переключениями).
+        // ==================================================
+        let maxViewportHeight = window.innerHeight;
+        window.addEventListener('resize', () => {
+            maxViewportHeight = Math.max(maxViewportHeight, window.innerHeight);
+        });
+
+        function healViewport() {
+            const container = document.querySelector('.app-container');
+
+            // 1) Сдвиг страницы к инпуту (панорамирование iOS) → назад в ноль
+            if (container) container.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+            window.scrollTo(0, 0);
+
+            // 2) «Залипший» сжатый вьюпорт → мигаем контейнером во всю высоту
+            if (!container || maxViewportHeight - window.innerHeight <= 4) return;
+            const scrollers = [document.querySelector('main'), document.querySelector('.modal-overlay.active')].filter(Boolean);
+            const scrollPositions = scrollers.map(el => el.scrollTop);
+            container.style.display = 'none';
+            void container.offsetHeight; // синхронный reflow — переключение без отрисовки
+            container.style.display = '';
+            scrollers.forEach((el, i) => { el.scrollTop = scrollPositions[i]; });
+            window.scrollTo(0, 0);
+        }
+
+        document.addEventListener('focusout', () => {
+            // Ждём, пока iOS закроет клавиатуру; если фокус лишь перешёл
+            // на другой инпут (клавиатура открыта) — вьюпорт не трогаем.
+            setTimeout(() => {
+                const ae = document.activeElement;
+                const typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
+                if (!typing) healViewport();
+            }, 200);
         });
 
         // ==================================================
