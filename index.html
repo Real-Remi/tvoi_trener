@@ -58,8 +58,6 @@
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
-        /* Оригинальная схема — как было до моих правок.
-           Никаких position:fixed на html/body, никаких двойных высот. */
         html, body {
             background-color: #000000;
             margin: 0;
@@ -71,6 +69,13 @@
         }
 
         body {
+            /* Фон и на body: если контейнер по какой-то причине не достаёт
+               до края экрана, зазор покажет фон приложения, а не чёрный */
+            background-color: var(--bg-color);
+            background-image: url("main/fon_1.jpg");
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
             font-family: var(--font-family);
             color: var(--text-main);
             line-height: 1.4;
@@ -126,6 +131,9 @@
             pointer-events: none;
         }
 
+        /* Фон у приложения есть всегда (дефолтный из main/ или кастомный),
+           поэтому затемнение и размытие применяются всегда */
+
         /* На десктопе делаем «телефонную» рамку */
         @media (min-width: 520px) {
             .app-container {
@@ -146,7 +154,7 @@
             }
         }
 
-        /* На мобильных — контейнер занимает весь экран, без рамки */
+        /* На мобильных скрываем внешние углы (app-container занимает весь экран) */
         @media (max-width: 519px) {
             .app-container {
                 border-radius: 0;
@@ -258,8 +266,9 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            /* Компактный отступ сверху — панель сидит выше */
-            padding: calc(4px + var(--safe-top)) 20px 6px;
+            padding: max(10px, var(--safe-top)) 20px 6px;
+            /* Сразу за safe-area, без лишних +10px — шапка выше */
+            padding-top: max(10px, var(--safe-top));
             position: relative;
             flex-shrink: 0;
             z-index: 100;
@@ -284,7 +293,7 @@
         body.no-glass .bottom-nav { background-color: var(--surface-color); backdrop-filter: none; -webkit-backdrop-filter: none; }
 
         .header-dropdown {
-            position: absolute; top: calc(62px + var(--safe-top)); right: 12px; width: 240px;
+            position: absolute; top: calc(52px + max(10px, var(--safe-top))); right: 12px; width: 240px;
             background-color: var(--surface-color); border: 1px solid var(--border-color);
             border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
             z-index: 150; overflow: hidden;
@@ -563,11 +572,11 @@
         .calendar-day.selected { background-color: var(--primary-color); color: #000; font-weight: bold; }
         .calendar-day.selected.weekend { color: #000; }
 
-        /* --- Bottom Nav ---
-           Панель сидит вплотную к home-индикатору (учтён safe-bottom) */
+        /* --- Bottom Nav --- */
         .bottom-nav {
             position: absolute;
-            bottom: calc(4px + var(--safe-bottom));
+            /* Нижняя панель — вплотную над home-indicator (как нативный tab bar) */
+            bottom: max(10px, var(--safe-bottom));
             left: 50%;
             transform: translateX(-50%);
             width: calc(100% - 20px);
@@ -1650,70 +1659,6 @@
         let pendingProfilePhoto = null;
 
         // ==================================================
-        // iOS: сброс «залипшего» скролла после клавиатуры
-        // ==================================================
-        // При фокусе на input iOS приподнимает страницу, чтобы показать
-        // поле над клавиатурой. При закрытии клавиатуры скролл не всегда
-        // возвращается в 0 — из-за этого внизу остаётся пустая полоса
-        // (в ней виден чёрный фон body). Здесь мы принудительно
-        // сбрасываем скролл окна и html/body.
-        (function initIOSKeyboardFix() {
-            function resetScroll() {
-                try { window.scrollTo(0, 0); } catch (e) {}
-                if (document.documentElement) {
-                    document.documentElement.scrollTop = 0;
-                    document.documentElement.scrollLeft = 0;
-                }
-                if (document.body) {
-                    document.body.scrollTop = 0;
-                    document.body.scrollLeft = 0;
-                }
-            }
-
-            function isTextField(el) {
-                if (!el) return false;
-                const tag = el.tagName;
-                if (tag !== 'INPUT' && tag !== 'TEXTAREA') return false;
-                const type = (el.type || '').toLowerCase();
-                // Для checkbox/radio/range и т.п. клавиатура не поднимается
-                return !['checkbox', 'radio', 'range', 'file', 'color', 'submit', 'button', 'reset'].includes(type);
-            }
-
-            document.addEventListener('focusout', (e) => {
-                if (!isTextField(e.target)) return;
-                [0, 80, 200, 400, 700].forEach(d => setTimeout(resetScroll, d));
-            });
-
-            document.addEventListener('focusin', (e) => {
-                if (!isTextField(e.target)) return;
-                // На случай если фокус перескочил между полями —
-                // не даём iOS «уехать» слишком далеко.
-                setTimeout(resetScroll, 50);
-            });
-
-            if (window.visualViewport) {
-                let lastH = window.visualViewport.height;
-                window.visualViewport.addEventListener('resize', () => {
-                    const h = window.visualViewport.height;
-                    // Клавиатура закрылась — высота выросла
-                    if (h - lastH > 60) {
-                        [0, 80, 200, 400].forEach(d => setTimeout(resetScroll, d));
-                    }
-                    lastH = h;
-                });
-                window.visualViewport.addEventListener('scroll', () => {
-                    if (window.visualViewport.offsetTop > 0 || window.visualViewport.pageTop > 0) {
-                        resetScroll();
-                    }
-                });
-            }
-
-            window.addEventListener('orientationchange', () => {
-                setTimeout(resetScroll, 300);
-            });
-        })();
-
-        // ==================================================
         // AVATAR VIEWER — координаты относительно контейнера
         // ==================================================
         let avatarViewerElements = null;
@@ -1727,6 +1672,7 @@
             const overlay = document.createElement('div');
             overlay.className = 'avatar-viewer-overlay';
             
+            // Вычисляем размеры относительно app-container, а не viewport
             const containerRect = appContainer.getBoundingClientRect();
             const cw = containerRect.width;
             const ch = containerRect.height;
@@ -3235,33 +3181,137 @@
         }
 
         document.querySelectorAll('#add-modal input, #profile-modal input').forEach(input => {
+            let scrollTimer = null;
             input.addEventListener('focus', () => {
-                setTimeout(() => input.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+                clearTimeout(scrollTimer);
+                scrollTimer = setTimeout(() => input.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
             });
+            input.addEventListener('blur', () => clearTimeout(scrollTimer));
         });
 
         // ==================================================
-        // PWA — service worker
+        // iOS: восстановление после закрытия клавиатуры
+        // Известный баг standalone-PWA на iOS: клавиатура «сжимает» вьюпорт,
+        // и после закрытия window.innerHeight / visualViewport.height / 100dvh
+        // могут навсегда остаться уменьшенными — приложение сжимается,
+        // внизу остаётся чёрная полоса. Дополнительно iOS может сдвинуть
+        // («панорамировать») страницу к инпуту, что тоже открывает чёрный фон.
+        // Лечение: после потери фокуса инпутом сбрасываем сдвиг страницы,
+        // а если вьюпорт «залип» — заставляем WebKit пересчитать его,
+        // кратко скрыв display у контейнера во всю высоту (без отрисовки
+        // между переключениями).
+        // ==================================================
+        let maxViewportHeight = window.innerHeight;
+        window.addEventListener('resize', () => {
+            maxViewportHeight = Math.max(maxViewportHeight, window.innerHeight);
+        });
+
+        function isStandalone() {
+            if (typeof navigator.standalone === 'boolean') return navigator.standalone;
+            return window.matchMedia('(display-mode: standalone)').matches;
+        }
+
+        function healViewport() {
+            // Клавиатура может быть ещё открыта — в этот момент ничего не трогаем
+            const ae = document.activeElement;
+            if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+
+            const container = document.querySelector('.app-container');
+
+            // 1) Сдвиг страницы к инпуту (панорамирование iOS) → назад в ноль
+            if (container) container.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+            window.scrollTo(0, 0);
+
+            // 2) «Залипший» сжатый вьюпорт → мигаем контейнером во всю высоту.
+            //    В standalone эталон — высота экрана: iOS может запустить
+            //    приложение уже со сжатым вьюпортом прошлой сессии,
+            //    и тогда чёрная полоса видна с самого начала.
+            const screenH = window.innerWidth > window.innerHeight ? screen.width : screen.height;
+            const target = Math.max(maxViewportHeight, isStandalone() ? screenH : 0);
+            if (!container || target - window.innerHeight <= 4) return;
+            const scrollers = [document.querySelector('main'), document.querySelector('.modal-overlay.active')].filter(Boolean);
+            const scrollPositions = scrollers.map(el => el.scrollTop);
+            container.style.display = 'none';
+            void container.offsetHeight; // синхронный reflow — переключение без отрисовки
+            container.style.display = '';
+            scrollers.forEach((el, i) => { el.scrollTop = scrollPositions[i]; });
+            window.scrollTo(0, 0);
+        }
+
+        document.addEventListener('focusout', () => {
+            // Ждём, пока iOS закроет клавиатуру; если фокус лишь перешёл
+            // на другой инпут (клавиатура открыта) — вьюпорт не трогаем.
+            setTimeout(() => {
+                const ae = document.activeElement;
+                const typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
+                if (!typing) healViewport();
+            }, 200);
+        });
+
+        // Лечение при запуске и при возврате в приложение: iOS иногда
+        // стартует со «сжатым» вьюпортом прошлой сессии — сразу чёрная полоса.
+        const healSoon = () => setTimeout(healViewport, 350);
+        window.addEventListener('pageshow', healSoon);
+        window.addEventListener('focus', healSoon);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) healSoon(); });
+
+        // ==================================================
+        // PWA — service worker (офлайн-режим и установка на телефон)
         // ==================================================
         if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').then(reg => {
-                    // Пытаемся обновить SW, если вышла новая версия
-                    reg.update().catch(() => {});
-                    reg.addEventListener('updatefound', () => {
-                        const newWorker = reg.installing;
-                        if (!newWorker) return;
-                        newWorker.addEventListener('statechange', () => {
-                            if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
-                                // Новая версия активирована — перезагружаем страницу,
-                                // чтобы подтянулись свежие index.html и стили.
-                                window.location.reload();
-                            }
-                        });
-                    });
-                }).catch(() => {});
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
             });
         }
+
+        // ==================================================
+        // ВРЕМЕННЫЙ бейдж диагностики вьюпорта (чёрная полоса на iPhone).
+        // Показывает метрики ~12 секунд после запуска/возврата в приложение.
+        // Удалить после диагностики.
+        // ==================================================
+        (function viewportDebugBadge() {
+            const badge = document.createElement('div');
+            badge.style.cssText = 'position:fixed;left:6px;top:40%;z-index:99999;pointer-events:none;' +
+                'font:10px/1.5 monospace;color:#0f0;background:rgba(0,0,0,0.78);padding:4px 6px;' +
+                'border-radius:6px;white-space:pre;text-align:left;';
+
+            function metrics() {
+                const probe = document.createElement('div');
+                probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;width:10px;' +
+                    'height:100dvh;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);';
+                document.body.appendChild(probe);
+                const pcs = getComputedStyle(probe);
+                const dvhH = probe.offsetHeight;
+                const st = pcs.paddingTop || '?';
+                const sb = pcs.paddingBottom || '?';
+                probe.remove();
+
+                const c = document.getElementById('app-container').getBoundingClientRect();
+                const vv = window.visualViewport;
+                const mode = (typeof navigator.standalone === 'boolean')
+                    ? (navigator.standalone ? 'standalone' : 'safari')
+                    : (window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser');
+                return 'ih:' + window.innerHeight + '  vv:' + (vv ? Math.round(vv.height) + '+' + Math.round(vv.offsetTop) : '-') +
+                    '\ndvh:' + dvhH + '  sh:' + screen.height + 'x' + screen.width +
+                    '\nsafeT:' + st + '  safeB:' + sb +
+                    '\ncb:' + Math.round(c.bottom) + '  docH:' + document.documentElement.scrollHeight +
+                    '\nscrollY:' + window.pageYOffset + '  ' + mode;
+            }
+
+            let timer = null;
+            function show() {
+                if (!document.body) return;
+                badge.textContent = metrics();
+                if (!badge.isConnected) document.body.appendChild(badge);
+                clearTimeout(timer);
+                timer = setTimeout(() => badge.remove(), 12000);
+            }
+            setTimeout(show, 1500);
+            window.addEventListener('pageshow', () => setTimeout(show, 1500));
+            document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(show, 1500); });
+        })();
 
         // ==================================================
         // INIT
