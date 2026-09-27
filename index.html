@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
     <meta name="theme-color" content="#121212">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -58,14 +58,25 @@
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
+        /* ==================================================
+           КЛЮЧЕВОЙ ФИКС ДЛЯ iOS
+           Фиксируем html и body намертво. iOS не сможет
+           их прокрутить при появлении клавиатуры, значит
+           не останется «чёрной полосы» под app-container.
+           ================================================== */
         html, body {
             background-color: #000000;
             margin: 0;
             padding: 0;
-            overflow: hidden;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
             height: 100%;
-            min-height: 100vh;
-            min-height: 100dvh;
+            overflow: hidden;
+            overscroll-behavior: none;
         }
 
         body {
@@ -76,7 +87,6 @@
             justify-content: center;
             align-items: center;
             touch-action: pan-y;
-            overscroll-behavior: none;
             user-select: none;
             -webkit-user-select: none;
             -webkit-touch-callout: none;
@@ -96,8 +106,9 @@
             position: relative;
             width: 100%;
             max-width: 480px;
-            height: 100vh;
-            height: 100dvh;
+            /* Высота = 100% от зафиксированного body (полный layout viewport).
+               Не используем dvh/vh — они «дышат» при клавиатуре на iOS. */
+            height: 100%;
             max-height: 900px;
             /* Фон по умолчанию (main/fon_1.jpg); кастомный фон перекрывается inline-стилем */
             background-color: var(--bg-color);
@@ -124,14 +135,10 @@
             pointer-events: none;
         }
 
-        /* Фон у приложения есть всегда (дефолтный из main/ или кастомный),
-           поэтому затемнение и размытие применяются всегда */
-
         /* На десктопе делаем «телефонную» рамку */
         @media (min-width: 520px) {
             .app-container {
-                height: calc(100vh - 40px);
-                height: calc(100dvh - 40px);
+                height: calc(100% - 40px);
                 border-radius: 36px;
                 box-shadow:
                     0 0 0 1px rgba(255, 255, 255, 0.08),
@@ -147,9 +154,17 @@
             }
         }
 
-        /* На мобильных скрываем внешние углы (app-container занимает весь экран) */
+        /* На мобильных — жёсткая фиксация контейнера по всему экрану.
+           Даже если iOS сдвинет visual viewport, контейнер останется
+           приклеенным к краям видимой области. */
         @media (max-width: 519px) {
             .app-container {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                max-width: none;
                 border-radius: 0;
                 max-height: none;
             }
@@ -260,7 +275,7 @@
             justify-content: center;
             align-items: center;
             /* Компактный отступ сверху: панель поднимается выше,
-               но не заходит под Dynamic Island (safe-top уже учитывает его) */
+               но не заходит под Dynamic Island */
             padding: calc(4px + var(--safe-top)) 20px 6px;
             position: relative;
             flex-shrink: 0;
@@ -1653,6 +1668,47 @@
         let pendingProfilePhoto = null;
 
         // ==================================================
+        // iOS KEYBOARD FIX
+        // Фиксируем scroll на 0 после закрытия клавиатуры.
+        // ==================================================
+        (function initIOSKeyboardFix() {
+            function forceReset() {
+                try {
+                    window.scrollTo(0, 0);
+                    if (document.documentElement) {
+                        document.documentElement.scrollTop = 0;
+                        document.documentElement.scrollLeft = 0;
+                    }
+                    if (document.body) {
+                        document.body.scrollTop = 0;
+                        document.body.scrollLeft = 0;
+                    }
+                } catch (e) {}
+            }
+
+            document.addEventListener('focusout', (e) => {
+                const t = e.target;
+                if (!t || (t.tagName !== 'INPUT' && t.tagName !== 'TEXTAREA')) return;
+                [0, 60, 160, 320, 520, 800].forEach(d => setTimeout(forceReset, d));
+            });
+
+            if (window.visualViewport) {
+                let lastH = window.visualViewport.height;
+                window.visualViewport.addEventListener('resize', () => {
+                    const h = window.visualViewport.height;
+                    if (h - lastH > 50) {
+                        [0, 60, 160, 320].forEach(d => setTimeout(forceReset, d));
+                    }
+                    lastH = h;
+                });
+            }
+
+            window.addEventListener('resize', () => {
+                setTimeout(forceReset, 100);
+            });
+        })();
+
+        // ==================================================
         // AVATAR VIEWER — координаты относительно контейнера
         // ==================================================
         let avatarViewerElements = null;
@@ -1666,7 +1722,6 @@
             const overlay = document.createElement('div');
             overlay.className = 'avatar-viewer-overlay';
             
-            // Вычисляем размеры относительно app-container, а не viewport
             const containerRect = appContainer.getBoundingClientRect();
             const cw = containerRect.width;
             const ch = containerRect.height;
@@ -2104,7 +2159,6 @@
         });
 
         resetBgBtn.addEventListener('click', () => {
-            // Возвращаем фон по умолчанию из папки main/
             appContainer.style.backgroundImage = '';
             document.body.classList.remove('has-custom-bg');
             localStorage.removeItem('customBg');
@@ -2141,8 +2195,6 @@
             }
         }
 
-        // Первый запуск новой версии: убираем демо-тренировки, которые старая
-        // версия показывала в календаре «из коробки». Реальные данные не затрагиваются.
         function cleanupLegacyDemoData() {
             if (localStorage.getItem(DEMO_CLEANUP_KEY) === '1') return;
             localStorage.setItem(DEMO_CLEANUP_KEY, '1');
@@ -2642,7 +2694,6 @@
                         document.body.classList.add('has-custom-bg');
                         localStorage.setItem('customBg', data.background);
                     } else {
-                        // Фон по умолчанию из папки main/
                         appContainer.style.backgroundImage = '';
                         document.body.classList.remove('has-custom-bg');
                         localStorage.removeItem('customBg');
@@ -2759,7 +2810,6 @@
                 document.body.classList.remove('no-scroll');
             } else {
                 document.body.classList.add('no-scroll');
-                if (appContainer) appContainer.scrollTop = 0;
             }
         }
 
@@ -2788,7 +2838,6 @@
             navItems.forEach(nav => nav.classList.remove('active'));
             views.forEach(view => view.classList.toggle('active', view.id === 'view-settings'));
             document.body.classList.add('no-scroll');
-            if (appContainer) appContainer.scrollTop = 0;
             history.pushState({ view: 'settings' }, '');
         }
 
@@ -3092,7 +3141,6 @@
             if (openModalId === 'day-details-modal') history.back();
         }
 
-        // История хранится по календарным числам месяца: { '5': [{ name, icon, sets }] }
         function getHistoryDayEntries() {
             return Object.keys(mockWorkoutHistory)
                 .filter(day => Array.isArray(mockWorkoutHistory[day]) && mockWorkoutHistory[day].length > 0)
@@ -3139,7 +3187,6 @@
             updateWeekChart();
         }
 
-        // Прогресс за неделю — считается по реальным данным пользователя
         function updateWeekChart() {
             const container = document.getElementById('week-chart');
             if (!container) return;
@@ -3150,7 +3197,6 @@
             const year = now.getFullYear();
             const month = now.getMonth();
 
-            // Записи истории привязаны к числу месяца — раскладываем их по дням недели текущего месяца
             getHistoryDayEntries().forEach(entry => {
                 const date = new Date(year, month, entry.day);
                 if (date.getMonth() !== month) return;
@@ -3181,60 +3227,7 @@
         });
 
         // ==================================================
-        // iOS FIX — чёрная полоса после закрытия клавиатуры
-        // ==================================================
-        // Проблема: на iOS при фокусе на <input> система сдвигает окно вверх,
-        // чтобы показать поле над клавиатурой. При закрытии клавиатуры этот
-        // сдвиг не всегда сбрасывается, и внизу остаётся чёрная полоса (виден
-        // чёрный фон body под app-container). Лечим принудительным сбросом
-        // скролла окна: слушаем focusout и visualViewport.resize.
-        (function initIOSKeyboardFix() {
-            function resetScroll() {
-                try {
-                    window.scrollTo(0, 0);
-                    if (document.documentElement) document.documentElement.scrollTop = 0;
-                    if (document.body) document.body.scrollTop = 0;
-                    // Форсируем reflow
-                    void document.body.offsetHeight;
-                } catch (e) {}
-            }
-
-            // 1) visualViewport — самый надёжный сигнал на iOS
-            if (window.visualViewport) {
-                let prevH = window.visualViewport.height;
-                window.visualViewport.addEventListener('resize', () => {
-                    const h = window.visualViewport.height;
-                    // Высота выросла — клавиатура закрылась
-                    if (h - prevH > 40) {
-                        resetScroll();
-                    }
-                    prevH = h;
-                });
-                window.visualViewport.addEventListener('scroll', () => {
-                    // Если визуальный вьюпорт сдвинулся вниз — вернём его
-                    if (window.visualViewport.offsetTop > 0 || window.visualViewport.pageTop > 0) {
-                        resetScroll();
-                    }
-                });
-            }
-
-            // 2) focusout — резервный сценарий (если visualViewport не сработал)
-            document.addEventListener('focusout', (e) => {
-                const t = e.target;
-                if (!t || (t.tagName !== 'INPUT' && t.tagName !== 'TEXTAREA')) return;
-                // Если фокус ушёл на другой input — не дёргаем скролл
-                setTimeout(() => {
-                    const active = document.activeElement;
-                    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
-                    resetScroll();
-                    setTimeout(resetScroll, 150);
-                    setTimeout(resetScroll, 350);
-                }, 30);
-            });
-        })();
-
-        // ==================================================
-        // PWA — service worker (офлайн-режим и установка на телефон)
+        // PWA
         // ==================================================
         if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
             window.addEventListener('load', () => {
