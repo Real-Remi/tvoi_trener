@@ -40,14 +40,6 @@
 
             --safe-top: env(safe-area-inset-top, 0px);
             --safe-bottom: env(safe-area-inset-bottom, 0px);
-
-            /* Размер и позиция фона приложения вынесены в переменные:
-               в iOS-standalone вьюпорт ниже экрана на высоту статус-бара, и
-               низ экрана (вне вьюпорта) закрашивает корневой canvas. Чтобы
-               там не было чёрной полосы, фон растягивается на весь экран
-               (подробнее — fitAppBackgroundToScreen в скриптах). */
-            --app-bg-size: cover;
-            --app-bg-pos: center;
         }
 
         body.light-theme {
@@ -67,6 +59,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
         html, body {
+            background-color: #000000;
             margin: 0;
             padding: 0;
             overflow: hidden;
@@ -75,29 +68,7 @@
             min-height: 100dvh;
         }
 
-        /* Фон приложения — на самом корне. iOS в standalone оставляет внизу
-           экрана полосу вне вьюпорта, и её закрашивает только canvas корневого
-           элемента: здесь раньше стоял чёрный цвет — он и давал «чёрную полосу».
-           Затемнение (--bg-overlay) добавлено отдельным слоем, чтобы зона ниже
-           вьюпорта совпадала по яркости с областью под оверлеем контейнера. */
-        html {
-            background-color: var(--bg-color);
-            background-image:
-                linear-gradient(var(--bg-overlay), var(--bg-overlay)),
-                url("main/fon_1.jpg");
-            background-size: var(--app-bg-size), var(--app-bg-size);
-            background-position: var(--app-bg-pos), var(--app-bg-pos);
-            background-repeat: no-repeat, no-repeat;
-        }
-
         body {
-            /* Фон и на body: если контейнер по какой-то причине не достаёт
-               до края экрана, зазор покажет фон приложения, а не чёрный */
-            background-color: var(--bg-color);
-            background-image: url("main/fon_1.jpg");
-            background-size: var(--app-bg-size);
-            background-position: var(--app-bg-pos);
-            background-repeat: no-repeat;
             font-family: var(--font-family);
             color: var(--text-main);
             line-height: 1.4;
@@ -131,8 +102,8 @@
             /* Фон по умолчанию (main/fon_1.jpg); кастомный фон перекрывается inline-стилем */
             background-color: var(--bg-color);
             background-image: url("main/fon_1.jpg");
-            background-size: var(--app-bg-size);
-            background-position: var(--app-bg-pos);
+            background-size: cover;
+            background-position: center;
             background-repeat: no-repeat;
             overflow: hidden;
             display: flex;
@@ -289,8 +260,7 @@
             justify-content: center;
             align-items: center;
             padding: max(10px, var(--safe-top)) 20px 6px;
-            /* Сразу за safe-area, без лишних +10px — шапка выше */
-            padding-top: max(10px, var(--safe-top));
+            padding-top: calc(10px + var(--safe-top));
             position: relative;
             flex-shrink: 0;
             z-index: 100;
@@ -315,7 +285,7 @@
         body.no-glass .bottom-nav { background-color: var(--surface-color); backdrop-filter: none; -webkit-backdrop-filter: none; }
 
         .header-dropdown {
-            position: absolute; top: calc(52px + max(10px, var(--safe-top))); right: 12px; width: 240px;
+            position: absolute; top: calc(62px + var(--safe-top)); right: 12px; width: 240px;
             background-color: var(--surface-color); border: 1px solid var(--border-color);
             border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
             z-index: 150; overflow: hidden;
@@ -597,8 +567,7 @@
         /* --- Bottom Nav --- */
         .bottom-nav {
             position: absolute;
-            /* Нижняя панель — вплотную над home-indicator (как нативный tab bar) */
-            bottom: max(10px, var(--safe-bottom));
+            bottom: calc(15px + var(--safe-bottom));
             left: 50%;
             transform: translateX(-50%);
             width: calc(100% - 20px);
@@ -2115,16 +2084,6 @@
             });
         }
 
-        // Фон приложения рисуется на трёх слоях: на корне (html), на body и на
-        // .app-container. Корневой canvas закрашивает зону ниже вьюпорта в
-        // iOS-standalone, поэтому кастомный фон нужно продублировать и там.
-        function applyAppBackground(imageUrl) {
-            appContainer.style.backgroundImage = imageUrl ? `url(${imageUrl})` : '';
-            document.documentElement.style.backgroundImage = imageUrl
-                ? `linear-gradient(var(--bg-overlay), var(--bg-overlay)), url(${imageUrl})`
-                : '';
-        }
-
         selectBgBtn.addEventListener('click', () => bgUpload.click());
 
         bgUpload.addEventListener('change', async (e) => {
@@ -2132,7 +2091,7 @@
             if (file) {
                 try {
                     const compressed = await compressImage(file, 1080, 0.85);
-                    applyAppBackground(compressed);
+                    appContainer.style.backgroundImage = `url(${compressed})`;
                     document.body.classList.add('has-custom-bg');
                     try { localStorage.setItem('customBg', compressed); }
                     catch (err) { alert('Не удалось сохранить фон: переполнено хранилище.'); }
@@ -2143,7 +2102,7 @@
 
         resetBgBtn.addEventListener('click', () => {
             // Возвращаем фон по умолчанию из папки main/
-            applyAppBackground('');
+            appContainer.style.backgroundImage = '';
             document.body.classList.remove('has-custom-bg');
             localStorage.removeItem('customBg');
         });
@@ -2151,7 +2110,7 @@
         function loadSavedBackground() {
             const savedBg = localStorage.getItem('customBg');
             if (savedBg) {
-                applyAppBackground(savedBg);
+                appContainer.style.backgroundImage = `url(${savedBg})`;
                 document.body.classList.add('has-custom-bg');
             }
         }
@@ -2676,12 +2635,12 @@
                         localStorage.setItem(VIBRATION_KEY, data.vibration ? '1' : '0');
                     }
                     if (data.background) {
-                        applyAppBackground(data.background);
+                        appContainer.style.backgroundImage = `url(${data.background})`;
                         document.body.classList.add('has-custom-bg');
                         localStorage.setItem('customBg', data.background);
                     } else {
                         // Фон по умолчанию из папки main/
-                        applyAppBackground('');
+                        appContainer.style.backgroundImage = '';
                         document.body.classList.remove('has-custom-bg');
                         localStorage.removeItem('customBg');
                     }
@@ -3213,102 +3172,10 @@
         }
 
         document.querySelectorAll('#add-modal input, #profile-modal input').forEach(input => {
-            let scrollTimer = null;
             input.addEventListener('focus', () => {
-                clearTimeout(scrollTimer);
-                scrollTimer = setTimeout(() => input.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+                setTimeout(() => input.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
             });
-            input.addEventListener('blur', () => clearTimeout(scrollTimer));
         });
-
-        // ==================================================
-        // iOS: восстановление после закрытия клавиатуры
-        // Известный баг standalone-PWA на iOS: клавиатура «сжимает» вьюпорт,
-        // и после закрытия window.innerHeight / visualViewport.height / 100dvh
-        // могут навсегда остаться уменьшенными — приложение сжимается,
-        // внизу остаётся чёрная полоса. Дополнительно iOS может сдвинуть
-        // («панорамировать») страницу к инпуту, что тоже открывает чёрный фон.
-        // Лечение: после потери фокуса инпутом сбрасываем сдвиг страницы,
-        // а если вьюпорт «залип» — заставляем WebKit пересчитать его,
-        // кратко скрыв display у контейнера во всю высоту (без отрисовки
-        // между переключениями).
-        // ==================================================
-        let maxViewportHeight = window.innerHeight;
-        window.addEventListener('resize', () => {
-            maxViewportHeight = Math.max(maxViewportHeight, window.innerHeight);
-            fitAppBackgroundToScreen();
-        });
-
-        function isStandalone() {
-            if (typeof navigator.standalone === 'boolean') return navigator.standalone;
-            return window.matchMedia('(display-mode: standalone)').matches;
-        }
-
-        // Фон приложения — на всю высоту физического экрана.
-        // В iOS-standalone вьюпорт короче экрана ровно на высоту статус-бара
-        // (793 против 852 на iPhone 15 Pro): контент прижат к верху, а полоса
-        // внизу экрана лежит ВНЕ вьюпорта. Закрасить её может только корневой
-        // canvas, поэтому фон задаём ещё и на html и растягиваем до screen.height,
-        // чтобы в этой зоне продолжался фон приложения, а не чёрная полоса.
-        function fitAppBackgroundToScreen() {
-            const rootStyle = document.documentElement.style;
-            const screenH = window.innerWidth > window.innerHeight ? screen.width : screen.height;
-            if (isStandalone() && screenH - window.innerHeight > 4) {
-                rootStyle.setProperty('--app-bg-size', '100% ' + screenH + 'px');
-                rootStyle.setProperty('--app-bg-pos', 'center top');
-            } else {
-                rootStyle.removeProperty('--app-bg-size');
-                rootStyle.removeProperty('--app-bg-pos');
-            }
-        }
-
-        function healViewport() {
-            // Клавиатура может быть ещё открыта — в этот момент ничего не трогаем
-            const ae = document.activeElement;
-            if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
-
-            const container = document.querySelector('.app-container');
-
-            // 1) Сдвиг страницы к инпуту (панорамирование iOS) → назад в ноль
-            if (container) container.scrollTop = 0;
-            document.documentElement.scrollTop = 0;
-            document.body.scrollTop = 0;
-            window.scrollTo(0, 0);
-
-            // 2) «Залипший» сжатый вьюпорт → мигаем контейнером во всю высоту.
-            //    В standalone эталон — высота экрана: iOS может запустить
-            //    приложение уже со сжатым вьюпортом прошлой сессии,
-            //    и тогда чёрная полоса видна с самого начала.
-            const screenH = window.innerWidth > window.innerHeight ? screen.width : screen.height;
-            const target = Math.max(maxViewportHeight, isStandalone() ? screenH : 0);
-            if (!container || target - window.innerHeight <= 4) return;
-            const scrollers = [document.querySelector('main'), document.querySelector('.modal-overlay.active')].filter(Boolean);
-            const scrollPositions = scrollers.map(el => el.scrollTop);
-            container.style.display = 'none';
-            void container.offsetHeight; // синхронный reflow — переключение без отрисовки
-            container.style.display = '';
-            scrollers.forEach((el, i) => { el.scrollTop = scrollPositions[i]; });
-            window.scrollTo(0, 0);
-        }
-
-        document.addEventListener('focusout', () => {
-            // Ждём, пока iOS закроет клавиатуру; если фокус лишь перешёл
-            // на другой инпут (клавиатура открыта) — вьюпорт не трогаем.
-            setTimeout(() => {
-                const ae = document.activeElement;
-                const typing = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
-                if (!typing) healViewport();
-            }, 200);
-        });
-
-        // Лечение при запуске и при возврате в приложение: iOS иногда
-        // стартует со «сжатым» вьюпортом прошлой сессии — сразу чёрная полоса.
-        // Заодно подгоняем фон под высоту экрана (полоса вне вьюпорта).
-        const healSoon = () => setTimeout(() => { fitAppBackgroundToScreen(); healViewport(); }, 350);
-        window.addEventListener('pageshow', healSoon);
-        window.addEventListener('focus', healSoon);
-        document.addEventListener('orientationchange', () => { fitAppBackgroundToScreen(); healSoon(); });
-        document.addEventListener('visibilitychange', () => { if (!document.hidden) healSoon(); });
 
         // ==================================================
         // PWA — service worker (офлайн-режим и установка на телефон)
@@ -3320,25 +3187,9 @@
         }
 
         // ==================================================
-        // ВРЕМЕННАЯ метка низа вьюпорта (диагностика чёрной полосы на iPhone).
-        // Полоска отмечает РОВНО низ вьюпорта: всё, что видно НИЖЕ неё, лежит
-        // вне вьюпорта и закрашивается корневым canvas. Удалить после проверки.
-        // ==================================================
-        (function viewportBottomMarker() {
-            const mark = document.createElement('div');
-            mark.style.cssText = 'position:fixed;left:0;right:0;bottom:0;height:8px;z-index:99999;pointer-events:none;' +
-                'background:repeating-linear-gradient(90deg,#ff00ff 0 12px,#00ffff 12px 24px);';
-            const attach = () => { if (document.body && !mark.isConnected) document.body.appendChild(mark); };
-            setTimeout(attach, 1500);
-            window.addEventListener('pageshow', () => setTimeout(attach, 1500));
-            document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(attach, 1500); });
-        })();
-
-        // ==================================================
         // INIT
         // ==================================================
         function init() {
-            fitAppBackgroundToScreen();
             loadSavedBackground();
             loadGlassState();
             loadVibrationState();
