@@ -60,6 +60,28 @@
 
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
+        /* --- Скрыть полосы прокрутки везде (TWA/Chrome рисует их как браузер) --- */
+        * { scrollbar-width: none; -ms-overflow-style: none; }
+        *::-webkit-scrollbar { width: 0; height: 0; display: none; background: transparent; }
+
+        html, body, main, .modal-overlay, .modal-content, .select-options,
+        .exercise-picker-list, .workout-mode-body, .categories,
+        .history-list, #day-details-container, .app-container {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        html::-webkit-scrollbar, body::-webkit-scrollbar, main::-webkit-scrollbar,
+        .modal-overlay::-webkit-scrollbar, .modal-content::-webkit-scrollbar,
+        .select-options::-webkit-scrollbar, .exercise-picker-list::-webkit-scrollbar,
+        .workout-mode-body::-webkit-scrollbar, .categories::-webkit-scrollbar,
+        .history-list::-webkit-scrollbar, #day-details-container::-webkit-scrollbar,
+        .app-container::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+            display: none;
+            background: transparent;
+        }
+
         html, body {
             background-color: #000000;
             margin: 0;
@@ -1650,7 +1672,6 @@
 
         // ==================================================
         // KEYBOARD HANDLING (VisualViewport API)
-        // Прижимаем активную модалку к низу экрана — прямо над клавиатурой
         // ==================================================
         (function setupKeyboardHandling() {
             if (!window.visualViewport) return;
@@ -1663,7 +1684,6 @@
                 document.body.classList.toggle('kb-open', isOpen);
 
                 if (!isOpen) {
-                    // Клавиатура закрыта — сбрасываем прокрутку оверлеев
                     document.querySelectorAll('.modal-overlay').forEach(ov => { ov.scrollTop = 0; });
                 }
             }
@@ -1673,7 +1693,6 @@
             updateKeyboardState();
         })();
 
-        // Если поле всё же оказалось скрыто клавиатурой — аккуратно доскроллим
         document.addEventListener('focusin', (e) => {
             const input = e.target;
             if (!input || !input.matches) return;
